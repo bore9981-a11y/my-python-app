@@ -1,54 +1,53 @@
 # -*- coding: utf-8 -*-
 import os
 import streamlit as st
-import tempfile
+import base64
 
-# 1. 你的 HTML 内容（请务必确保包含原来的所有内容）
+# --- 1. HTML_CODE 保持不变 ---
 HTML_CODE = """
 <!-- 这里粘贴你原本完整的 HTML 代码 -->
 """
 
 def main():
-    # 检测环境
+    # 环境检测
     is_web = os.path.exists("/mount/src") or st.runtime.exists()
 
     if is_web:
-        # --- 网页端稳定渲染方案 ---
+        # --- 网页端渲染：避开 v1 警告的写法 ---
         st.set_page_config(page_title="3D 雕塑石泥计算器", layout="centered")
         
-        # 将 HTML 写入临时文件，避免 Data URI 过长导致的空白问题
-        # 这是解决大型 HTML 渲染最可靠的方法
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".html", mode="w", encoding="utf-8") as tmp:
-            tmp.write(HTML_CODE)
-            tmp_path = tmp.name
+        # 针对大体积 HTML 的优化处理
+        # 1. 先进行 Base64 编码
+        encoded_html = base64.b64encode(HTML_CODE.encode("utf-8")).decode("utf-8")
         
-        # 读取文件内容并以 HTML 块的形式输出
-        # 针对 2026 年 st.iframe 移除 v1 警告的最终合规写法
-        with open(tmp_path, "r", encoding="utf-8") as f:
-            html_content = f.read()
+        # 2. 构建 Data URI，注意加入 charset 确保中文不空白
+        data_uri = f"data:text/html;charset=utf-8;base64,{encoded_html}"
+        
+        # 3. 使用 st.iframe。注意：不要加任何 components.v1 前缀
+        # 也不要加 scrolling=False。只给高度。
+        st.iframe(data_uri, height=680)
+        
+        # 如果还是空白，说明你的 HTML 里的脚本可能尝试访问父窗口
+        # 我们在下方加一个备用容器说明
+        st.caption("若计算器未加载，请刷新页面或检查浏览器权限。")
             
-        # 使用 Streamlit 官方推荐的替代方案进行渲染
-        # height 根据你的 1/4 屏幕设计设为 650
-        st.components.v1.html(html_content, height=650)
-        
-        # 注意：如果上面的 v1.html 依然报警告，说明你的环境强制要求 st.iframe。
-        # 这种情况下，我们需要将文件暴露为 URL。但目前最直接的修复是确保字符串不被截断。
-        
     else:
-        # --- 本地桌面模式逻辑 ---
+        # --- 本地桌面模式 ---
         run_desktop_mode()
 
 def run_desktop_mode():
+    import tempfile
     import subprocess
     import sys
     
     t_dir = tempfile.gettempdir()
-    h_file = os.path.join(t_dir, "guqin_calc_native.html")
+    h_file = os.path.join(t_dir, "guqin_calc.html")
     with open(h_file, "w", encoding="utf-8") as f:
         f.write(HTML_CODE)
     
     file_uri = f"file:///{h_file.replace(os.sep, '/')}"
     if sys.platform == "win32":
+        # 桌面独立浮窗启动
         os.system(f'start msedge --app="{file_uri}" --window-size=380,620')
     else:
         import webbrowser
