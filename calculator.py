@@ -1,50 +1,52 @@
 # -*- coding: utf-8 -*-
 import os
-import sys
 import base64
 import streamlit as st
+import streamlit.components.v1 as components
 
-# --- 1. HTML_CODE 保持不变，请确保包含你原来的完整代码 ---
+# --- 1. 你的 HTML 内容（请确保保留原来的完整代码） ---
 HTML_CODE = """
-<!-- 这里粘贴你原本的完整 HTML 代码 -->
+<!-- 这里粘贴你原来的完整 HTML 代码 -->
 """
 
 def main():
-    # 检查是否在 Streamlit 网页环境下运行
-    # 判断标准：是否存在 Streamlit Cloud 路径或运行时环境
-    is_web = os.path.exists("/mount/src") or st.runtime.exists()
-
-    if is_web:
-        # --- 网页渲染模式 ---
-        st.set_page_config(page_title="3D 雕塑石泥计算器", layout="centered")
-        
-        # 将 HTML 转换为 base64
-        b64_content = base64.b64encode(HTML_CODE.encode("utf-8")).decode()
-        data_uri = f"data:text/html;base64,{b64_content}"
-        
-        # 【核心修复】：去掉了引发报错的 scrolling 参数，只保留 height
-        st.iframe(data_uri, height=650)
-        
+    # 检测是否在网页环境
+    if os.path.exists("/mount/src") or st.runtime.exists():
+        render_web_mode()
     else:
-        # --- 本地桌面模式 ---
-        run_local_desktop()
+        run_desktop_mode()
 
-def run_local_desktop():
+def render_web_mode():
+    st.set_page_config(page_title="3D 雕塑石泥计算器", layout="centered")
+
+    # 方案：将 HTML 包装成一个可以直接渲染的 Data URI
+    # 如果 HTML 太大导致空白，我们加上 utf-8 声明和必要的转义
+    try:
+        encoded_html = base64.b64encode(HTML_CODE.encode("utf-8")).decode("utf-8")
+        data_uri = f"data:text/html;charset=utf-8;base64,{encoded_html}"
+        
+        # 使用 components.iframe (这是目前最稳定的嵌入方式)
+        # 注意：height 必须足够大以容纳你的计算器
+        components.iframe(data_uri, height=700)
+        
+    except Exception as e:
+        st.error(f"渲染失败: {e}")
+
+def run_desktop_mode():
     import tempfile
     import subprocess
+    import sys
     
     temp_path = os.path.join(tempfile.gettempdir(), "guqin_calc.html")
     with open(temp_path, "w", encoding="utf-8") as f:
         f.write(HTML_CODE)
     
-    file_url = f"file:///{temp_path.replace(os.sep, '/')}"
-    
+    file_uri = f"file:///{temp_path.replace(os.sep, '/')}"
     if sys.platform == "win32":
-        # 尝试以桌面应用模式启动
-        os.system(f'start msedge --app="{file_url}" --window-size=380,620')
+        os.system(f'start msedge --app="{file_uri}" --window-size=380,620')
     else:
         import webbrowser
-        webbrowser.open(file_url)
+        webbrowser.open(file_uri)
 
 if __name__ == "__main__":
     main()
